@@ -27,6 +27,10 @@ const imgSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  foundormiss: {
+    type: String,
+    required: true,
+  },
 });
 imgSchema.set("toJSON", { virtuals: true });
 imgSchema.set("toObject", { virtuals: true });

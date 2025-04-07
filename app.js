@@ -122,56 +122,85 @@ loadModels().then(() => {
     upload.single("img"),
     Auth,
     expressAsyncHandler(async (req, res, next) => {
-      const imagePath = req.file.path;
-      const { name, age, Where_find_him, When_find_him, gender } = req.body;
-      const id_user = req.id;
-      const Path = path.join(__dirname, imagePath);
-      const img_url = Path;
-      if (!name || !age || !Where_find_him || !When_find_him || !gender) {
-        next(new AppErr("all fields must be of the form", 404));
-      }
-
-      const result = await compareFace(imagePath);
-
-      if (
-        result === "No face detected in the image" ||
-        result === "not found" ||
-        result === Path
-      ) {
-        const missing = await imgModule.insertMany({
+      try {
+        const {
           name,
           age,
           Where_find_him,
           When_find_him,
           gender,
-          img_url,
-          id_user,
-        });
-        res.send({
-          message: "Image uploaded successfully",
-          path: imagePath,
-          info: missing,
-        });
-      } else {
-        console.log(result);
-        let id = "";
-        const user = await imgModule
-          .findOne({ img_url: result })
-          .populate("id_user", "email");
-        if (user) {
-          id = user.id_user;
-          user.found = true;
-          user.similar = true;
-          user.similar_img_url = img_url;
-          user.id_user_similar = id_user;
-          await user.save();
+          foundormiss,
+        } = req.body;
+        if (
+          !name ||
+          !age ||
+          !Where_find_him ||
+          !When_find_him ||
+          !gender ||
+          !foundormiss
+        ) {
+          return next(new AppErr("All fields are required", 400));
         }
 
-        const found_user = await userModule.findById(id_user);
+        const imagePath = req.file.path;
+        const img_url = path.join(__dirname, imagePath);
+        const id_user = req.id;
 
-        Notifications(user.id_user.email, user.name, found_user.phone);
+        const hasImages = await imgModule.countDocuments();
 
-        const missing = await imgModule.insertMany({
+        let result = "not found";
+        if (hasImages > 0) {
+          result = await compareFace(imagePath);
+        }
+
+        if (
+          result === "No face detected in the image" ||
+          result === "not found" ||
+          result === img_url
+        ) {
+          const missing = await imgModule.create({
+            name,
+            age,
+            Where_find_him,
+            When_find_him,
+            gender,
+            img_url,
+            id_user,
+            foundormiss,
+          });
+
+          return res.send({
+            message: "Image uploaded successfully",
+            path: imagePath,
+            info: missing,
+          });
+        }
+
+        const user = await imgModule
+          .findOne({ img_url: result })
+          .populate("id_user", "email")
+          .lean();
+
+        if (user) {
+          await imgModule.updateOne(
+            { img_url: result },
+            {
+              $set: {
+                found: true,
+                similar: true,
+                similar_img_url: img_url,
+                id_user_similar: id_user,
+              },
+            }
+          );
+
+          const found_user = await userModule.findById(id_user).select("phone");
+          if (found_user) {
+            Notifications(user.id_user.email, user.name, found_user.phone);
+          }
+        }
+
+        const missing = await imgModule.create({
           name,
           age,
           Where_find_him,
@@ -181,15 +210,21 @@ loadModels().then(() => {
           id_user,
           similar: true,
           similar_img_url: result,
-          id_user_similar: id,
+          id_user_similar: user?.id_user || "",
+          foundormiss,
         });
 
-        res
-          .status(200)
-          .send({ message: "Image matched", path: result, info: missing });
+        res.status(200).send({
+          message: "Image matched",
+          path: result,
+          info: missing,
+        });
+      } catch (error) {
+        next(error);
       }
     })
   );
+
   app.use(Golbalmiddlware);
   app.listen(3000, () => {
     console.log("Server is running on port 3000");
