@@ -5,7 +5,7 @@ module.exports.Send_Email = async (email, code, token) => {
     service: "gmail",
     auth: {
       user: "nouralgmal123@gmail.com",
-      pass: "nuoh akta bkqx nktw",
+      pass: process.env.emailpassword,
     },
   });
 
@@ -92,7 +92,7 @@ module.exports.Notifications = async (email, name, phone) => {
     service: "gmail",
     auth: {
       user: "nouralgmal123@gmail.com",
-      pass: "nuoh akta bkqx nktw",
+      pass: process.env.emailpassword,
     },
   });
 
