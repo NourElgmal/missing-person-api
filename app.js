@@ -178,7 +178,7 @@ loadModels().then(() => {
 
         const user = await imgModule
           .findOne({ img_url: result })
-          .populate("id_user", "email")
+          .populate("id_user", "email phone")
           .lean();
 
         if (user) {
@@ -194,9 +194,12 @@ loadModels().then(() => {
             }
           );
 
-          const found_user = await userModule.findById(id_user).select("phone");
+          const found_user = await userModule
+            .findById(id_user)
+            .select("phone email");
           if (found_user) {
             Notifications(user.id_user.email, user.name, found_user.phone);
+            Notifications(found_user.email, name, user.id_user.phone);
           }
         }
 
