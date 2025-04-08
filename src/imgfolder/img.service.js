@@ -69,6 +69,19 @@ module.exports.deleteimg = expressAsyncHandler(async (req, res, next) => {
   if (!img) {
     return next(new AppErr("not found img", 404));
   }
+  if (img.similar) {
+    const similarimg = await imgModule.findOneAndUpdate(
+      { img_url: img.similar_img_url },
+      {
+        similar: false,
+        found: false,
+        similar_img_url: null,
+        id_user_similar: null,
+      },
+      { new: true }
+    );
+  }
+
   deleteFile(img.img_url, "user");
   res.status(200).json({ message: "Image deleted successfully" });
 });
