@@ -23,6 +23,8 @@ const imgModule = require("./src/imgfolder/img.module");
 const userModule = require("./src/user/user.module");
 const expressAsyncHandler = require("express-async-handler");
 const { Notifications } = require("./utils/sendemail");
+const img_feature = require("./src/imagefeatures/imagefeature.module");
+const { deleteFile } = require("./utils/deleteimg");
 // إعداد canvas لـ face-api.js
 faceapi.env.monkeyPatch({
   Canvas: canvas.Canvas,
@@ -66,36 +68,24 @@ async function getFaceDescriptor(imagePath) {
 }
 
 // دالة لمقارنة الوجوه
-async function compareFace(newImagePath) {
-  const newFaceDescriptor = await getFaceDescriptor(newImagePath);
-
-  if (newFaceDescriptor.length === 0) {
-    return "No face detected in the image"; // لا يوجد وجه في الصورة
-  }
-
-  const newFace = newFaceDescriptor[0].descriptor;
-
-  // قراءة جميع الصور المخزنة في مجلد uploads/user
-  const storedImages = fs
-    .readdirSync(path.join(__dirname, "uploads", "user"))
-    .map((filename) => {
-      return path.join(__dirname, "uploads", "user", filename);
-    });
+async function compareFace(newImagePath, newFace) {
+  const lastimgfeature = await img_feature.find();
 
   // مقارنة الوجه الجديد مع الصور المخزنة
-  for (const storedImagePath of storedImages) {
-    const storedFaceDescriptor = await getFaceDescriptor(storedImagePath);
+  for (const storedImagePath of lastimgfeature) {
+    //storedImages
+    //const storedFaceDescriptor = await getFaceDescriptor(storedImagePath);
 
-    if (storedFaceDescriptor.length === 0) continue;
+    /*if (storedFaceDescriptor.length === 0) continue;*/
 
-    const storedFace = storedFaceDescriptor[0].descriptor;
+    const storedFace = new Float32Array(storedImagePath.img_feature); //storedFaceDescriptor[0].descriptor;
 
     // حساب المسافة بين الوجهين باستخدام Euclidean Distance
     const distance = faceapi.euclideanDistance(newFace, storedFace);
 
     if (distance < 0.6) {
       // إذا كانت المسافة أقل من 0.6
-      return storedImagePath; // العثور على تطابق، إعادة مسار الصورة
+      return storedImagePath.img_url; // العثور على تطابق، إعادة مسار الصورة
     }
   }
 
@@ -130,7 +120,14 @@ loadModels().then(() => {
           When_find_him,
           gender,
           foundormiss,
+          police_address,
         } = req.body;
+
+        if (!req.file) {
+          return next(new AppErr("All fields are required", 400));
+        }
+        const imagePath = req.file.path;
+        const img_url = path.join(__dirname, imagePath);
         if (
           !name ||
           !age ||
@@ -139,18 +136,34 @@ loadModels().then(() => {
           !gender ||
           !foundormiss
         ) {
+          deleteFile(img_url);
+          return next(new AppErr("All fields are required", 400));
+        }
+        if (foundormiss == "true" && !police_address) {
+          deleteFile(img_url);
           return next(new AppErr("All fields are required", 400));
         }
 
-        const imagePath = req.file.path;
-        const img_url = path.join(__dirname, imagePath);
         const id_user = req.id;
 
         const hasImages = await imgModule.countDocuments();
 
         let result = "not found";
+        const newFaceDescriptor = await getFaceDescriptor(imagePath);
+
+        if (newFaceDescriptor.length === 0) {
+          deleteFile(img_url);
+          return next(new AppErr("No face detected in the image", 500)); // لا يوجد وجه في الصورة
+        }
+
+        const newFace = newFaceDescriptor[0].descriptor;
+        await img_feature.create({
+          user_id: id_user,
+          img_feature: Array.from(newFace),
+          img_url: path.join(__dirname, imagePath),
+        });
         if (hasImages > 0) {
-          result = await compareFace(imagePath);
+          result = await compareFace(imagePath, newFace);
         }
 
         if (
@@ -167,6 +180,7 @@ loadModels().then(() => {
             img_url,
             id_user,
             foundormiss,
+            police_address,
           });
 
           return res.send({
@@ -178,29 +192,20 @@ loadModels().then(() => {
 
         const user = await imgModule
           .findOne({ img_url: result })
-          .populate("id_user", "email phone")
-          .lean();
+          .populate("id_user", "email phone");
 
         if (user) {
-          await imgModule.updateOne(
-            { img_url: result },
-            {
-              $set: {
-                found: true,
-                similar: true,
-                similar_img_url: img_url,
-                id_user_similar: id_user,
-              },
-            }
-          );
-
-          const found_user = await userModule
-            .findById(id_user)
-            .select("phone email");
-          if (found_user) {
-            Notifications(user.id_user.email, user.name, found_user.phone);
-            Notifications(found_user.email, name, user.id_user.phone);
+          user.found = true;
+          user.similar = true;
+          user.similar_img_url = img_url;
+          user.id_user_similar = id_user;
+          if (police_address) {
+            user.police_address = police_address;
           }
+          await user.save();
+
+          Notifications(user.id_user.email, user.name, police_address);
+          Notifications(req.email, name, police_address);
         }
 
         const missing = await imgModule.create({
@@ -215,6 +220,7 @@ loadModels().then(() => {
           similar_img_url: result,
           id_user_similar: user?.id_user || "",
           foundormiss,
+          police_address,
         });
 
         res.status(200).send({
@@ -223,7 +229,11 @@ loadModels().then(() => {
           info: missing,
         });
       } catch (error) {
-        next(error);
+        deleteFile(path.join(__dirname, req.file.path));
+        await img_feature.findOneAndDelete({
+          img_url: path.join(__dirname, req.file.path),
+        });
+        return next(new AppErr(error, error.status));
       }
     })
   );

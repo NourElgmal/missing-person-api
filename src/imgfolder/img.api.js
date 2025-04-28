@@ -7,6 +7,7 @@ const {
   info_user_and_chaild,
   deleteimg,
   getmyupload,
+  set_resive_time,
 } = require("./img.service");
 
 const express = require("express").Router();
@@ -17,4 +18,5 @@ express.get("/img/getImgbyid/:id", Auth, getImgbyid);
 express.get("/img/info_user_and_chaild/:id", Auth, info_user_and_chaild);
 express.delete("/img/delete_img/:id", Auth, deleteimg);
 express.get("/img/myupload", Auth, getmyupload);
+express.put("/img/settime/:id", Auth, set_resive_time);
 module.exports = express;

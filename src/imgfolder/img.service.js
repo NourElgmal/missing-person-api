@@ -3,6 +3,7 @@ const imgModule = require("./img.module");
 const AppErr = require("../../utils/Apperr");
 const userModule = require("../user/user.module");
 const { deleteFile } = require("../../utils/deleteimg");
+const { Notifications } = require("../../utils/sendemail");
 module.exports.getAllimg = expressAsyncHandler(async (req, res, next) => {
   const img = await imgModule.find({ found: false });
   if (img.length <= 0) {
@@ -84,4 +85,54 @@ module.exports.deleteimg = expressAsyncHandler(async (req, res, next) => {
 
   deleteFile(img.img_url, "user");
   res.status(200).json({ message: "Image deleted successfully" });
+});
+module.exports.set_resive_time = expressAsyncHandler(async (req, res, next) => {
+  const id = req.params.id;
+  if (!id) {
+    return next(new AppErr("not found id", 404));
+  }
+
+  const { time } = req.body;
+  if (!time) {
+    return next(new AppErr("time is required", 400));
+  }
+
+  const user = req.id;
+
+  const img = await imgModule
+    .findOneAndUpdate(
+      { _id: id, id_user: user, found: true },
+      { resiv_time: time },
+      { new: true }
+    )
+    .populate("id_user", "email")
+    .populate("id_user_similar", "email");
+
+  if (!img) {
+    return next(new AppErr("Image not found with this id", 404));
+  }
+
+  const lostimg = await imgModule.findOneAndUpdate(
+    { img_url: img.similar_img_url },
+    { resiv_time: time },
+    { new: true }
+  );
+
+  if (!lostimg) {
+    return next(new AppErr("Lost image not found", 404));
+  }
+
+  Notifications(
+    img.id_user.email,
+    img.name,
+    `${img.police_address} - I will be there at ${time}`
+  );
+
+  Notifications(
+    img.id_user_similar.email,
+    lostimg.name,
+    `${img.police_address} - I will be there at ${time}`
+  );
+
+  res.status(200).json({ message: "Time set successfully" });
 });

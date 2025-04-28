@@ -30,6 +30,12 @@ module.exports.Auth = expressAsyncHandler(async (req, res, next) => {
     }
 
     req.id = decoded.id;
+    try {
+      if (decoded.email) {
+        req.email = decoded.email;
+      }
+    } catch (e) {}
+
     next();
   });
 });

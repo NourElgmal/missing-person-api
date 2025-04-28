@@ -1,4 +1,3 @@
-// img.module.js
 const mongoose = require("mongoose");
 
 const imgSchema = new mongoose.Schema({
@@ -30,6 +29,26 @@ const imgSchema = new mongoose.Schema({
   foundormiss: {
     type: String,
     required: true,
+  },
+  police_address: {
+    type: String,
+    default: null,
+  },
+  resiv_time: {
+    type: String,
+    default: "Unspecified",
+  },
+  updateAt: {
+    type: Date,
+    default: new Date(),
+  },
+  updated: {
+    type: Boolean,
+    default: false,
+  },
+  Time_is_up: {
+    type: Boolean,
+    default: false,
   },
 });
 imgSchema.set("toJSON", { virtuals: true });
