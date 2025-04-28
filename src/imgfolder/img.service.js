@@ -4,6 +4,8 @@ const AppErr = require("../../utils/Apperr");
 const userModule = require("../user/user.module");
 const { deleteFile } = require("../../utils/deleteimg");
 const { Notifications } = require("../../utils/sendemail");
+const img_feature = require("../imagefeatures/imagefeature.module");
+
 module.exports.getAllimg = expressAsyncHandler(async (req, res, next) => {
   const img = await imgModule.find({ found: false });
   if (img.length <= 0) {
@@ -67,6 +69,7 @@ module.exports.deleteimg = expressAsyncHandler(async (req, res, next) => {
     return next(new AppErr("not found id", 404));
   }
   const img = await imgModule.findByIdAndDelete(id);
+  const feature = await img_feature.findOneAndDelete({ img_url: img.img_url });
   if (!img) {
     return next(new AppErr("not found img", 404));
   }
