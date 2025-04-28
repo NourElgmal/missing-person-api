@@ -87,7 +87,7 @@ module.exports.Send_Email = async (email, code, token) => {
   });
 };
 
-module.exports.Notifications = async (email, name, phone) => {
+module.exports.Notifications = async (email, name, Address) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -153,13 +153,13 @@ module.exports.Notifications = async (email, name, phone) => {
       <thead>
         <tr>
           <th>Name</th>
-          <th>Phone Number</th>
+          <th>Address of the police station where the delivery will be made</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td>${name}</td>
-          <td>${phone}</td>
+          <td>${Address}</td>
         </tr>
       </tbody>
     </table>
