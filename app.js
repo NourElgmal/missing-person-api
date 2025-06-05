@@ -5,12 +5,14 @@ process.on("uncaughtException", (e) => {
   });
   process.exit(1);
 });
+
 const express = require("express");
 const app = express();
 const multer = require("multer");
 const mongoose = require("mongoose");
 const fs = require("fs");
 const path = require("path");
+const { Worker } = require("worker_threads");
 const faceapi = require("face-api.js");
 const canvas = require("canvas");
 require("dotenv").config({ path: "./config/.env" });
@@ -25,84 +27,71 @@ const expressAsyncHandler = require("express-async-handler");
 const { Notifications } = require("./utils/sendemail");
 const img_feature = require("./src/imagefeatures/imagefeature.module");
 const { deleteFile } = require("./utils/deleteimg");
-// إعداد canvas لـ face-api.js
+
 faceapi.env.monkeyPatch({
   Canvas: canvas.Canvas,
   Image: canvas.Image,
   ImageData: canvas.ImageData,
 });
 
-// تحميل النماذج المدربة
 async function loadModels() {
-  const MODEL_URL = path.join(__dirname, "models"); // تأكد من وضع مجلد النماذج هنا
+  const MODEL_URL = path.join(__dirname, "models");
   await faceapi.nets.ssdMobilenetv1.loadFromDisk(MODEL_URL);
   await faceapi.nets.faceLandmark68Net.loadFromDisk(MODEL_URL);
   await faceapi.nets.faceRecognitionNet.loadFromDisk(MODEL_URL);
 }
 
-// إعداد multer لتخزين الملفات
+const runFaceWorker = (imagePath) => {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, "faceWorker.js"), {
+      workerData: { imagePath },
+    });
+    worker.on("message", (msg) => {
+      if (msg.status === "done") {
+        resolve(msg.detections);
+      } else {
+        reject(new Error(msg.error));
+      }
+    });
+    worker.on("error", reject);
+    worker.on("exit", (code) => {
+      if (code !== 0)
+        reject(new Error(`Worker stopped with exit code ${code}`));
+    });
+  });
+};
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/user"); // تخزين الصور في هذا المجلد
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // تسمية الملف بالوقت الحالي
-  },
+  destination: (req, file, cb) => cb(null, "uploads/user"),
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + path.extname(file.originalname)),
 });
 const upload = multer({ storage });
 
-// التحقق من وجود مجلد التخزين وإنشائه إذا لم يكن موجودًا
 const uploadDir = path.join(__dirname, "uploads", "user");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// دالة لاكتشاف الوجه واستخراج الوجه descriptor
-async function getFaceDescriptor(imagePath) {
-  const img = await canvas.loadImage(imagePath);
-  const detections = await faceapi
-    .detectAllFaces(img)
-    .withFaceLandmarks()
-    .withFaceDescriptors();
-  return detections;
-}
-
-// دالة لمقارنة الوجوه
 async function compareFace(newImagePath, newFace) {
   const lastimgfeature = await img_feature.find();
-
-  // مقارنة الوجه الجديد مع الصور المخزنة
   for (const storedImagePath of lastimgfeature) {
-    //storedImages
-    //const storedFaceDescriptor = await getFaceDescriptor(storedImagePath);
-
-    /*if (storedFaceDescriptor.length === 0) continue;*/
-
-    const storedFace = new Float32Array(storedImagePath.img_feature); //storedFaceDescriptor[0].descriptor;
-
-    // حساب المسافة بين الوجهين باستخدام Euclidean Distance
+    const storedFace = new Float32Array(storedImagePath.img_feature);
     const distance = faceapi.euclideanDistance(newFace, storedFace);
-
-    if (distance < 0.6) {
-      // إذا كانت المسافة أقل من 0.6
-      return storedImagePath.img_url; // العثور على تطابق، إعادة مسار الصورة
-    }
+    if (distance < 0.6) return storedImagePath.img_url;
   }
-
-  return "not found"; // لم يتم العثور على تطابق
+  return "not found";
 }
 
-// تحميل النماذج المدربة قبل بدء الخادم
 loadModels().then(() => {
-  // إعداد Express
   app.use(express.static("uploads"));
   app.use(express.json());
 
-  mongoose.connect(process.env.database).then(() => {
-    console.log("Connected to MongoDB");
-  });
+  mongoose
+    .connect(process.env.database)
+    .then(() => console.log("Connected to MongoDB"));
+
   app.use(morgan("dev"));
-  app.use(express.json());
   app.use(cors());
   app.use(require("./src/user/user.api"));
   app.use(require("./src/imgfolder/img.api"));
@@ -113,7 +102,7 @@ loadModels().then(() => {
     Auth,
     expressAsyncHandler(async (req, res, next) => {
       try {
-        const {
+        let {
           name,
           age,
           Where_find_him,
@@ -123,11 +112,11 @@ loadModels().then(() => {
           police_address,
         } = req.body;
 
-        if (!req.file) {
-          return next(new AppErr("All fields are required", 400));
-        }
+        if (!req.file) return next(new AppErr("All fields are required", 400));
+
         const imagePath = req.file.path;
         const img_url = path.join(__dirname, imagePath);
+
         if (
           !name ||
           !age ||
@@ -139,38 +128,35 @@ loadModels().then(() => {
           deleteFile(img_url);
           return next(new AppErr("All fields are required", 400));
         }
-        if (foundormiss == "true" && !police_address) {
+
+        if (foundormiss === "true" && !police_address) {
           deleteFile(img_url);
           return next(new AppErr("All fields are required", 400));
         }
 
         const id_user = req.id;
-
         const hasImages = await imgModule.countDocuments();
-
         let result = "not found";
-        const newFaceDescriptor = await getFaceDescriptor(imagePath);
 
-        if (newFaceDescriptor.length === 0) {
+        const newFaceDescriptor = await runFaceWorker(imagePath);
+
+        if (!newFaceDescriptor || newFaceDescriptor.length === 0) {
           deleteFile(img_url);
-          return next(new AppErr("No face detected in the image", 500)); // لا يوجد وجه في الصورة
+          return next(new AppErr("No face detected in the image", 500));
         }
 
         const newFace = newFaceDescriptor[0].descriptor;
         await img_feature.create({
           user_id: id_user,
           img_feature: Array.from(newFace),
-          img_url: path.join(__dirname, imagePath),
+          img_url,
         });
+
         if (hasImages > 0) {
           result = await compareFace(imagePath, newFace);
         }
 
-        if (
-          result === "No face detected in the image" ||
-          result === "not found" ||
-          result === img_url
-        ) {
+        if (result === "not found" || result === img_url) {
           const missing = await imgModule.create({
             name,
             age,
@@ -201,6 +187,9 @@ loadModels().then(() => {
           user.id_user_similar = id_user;
           if (police_address) {
             user.police_address = police_address;
+          } else {
+            console.log(user.police_address);
+            police_address = user.police_address;
           }
           await user.save();
 
@@ -229,20 +218,19 @@ loadModels().then(() => {
           info: missing,
         });
       } catch (error) {
-        deleteFile(path.join(__dirname, req.file.path));
+        deleteFile(path.join(__dirname, req.file?.path || ""));
         await img_feature.findOneAndDelete({
-          img_url: path.join(__dirname, req.file.path),
+          img_url: path.join(__dirname, req.file?.path || ""),
         });
-        return next(new AppErr(error, error.status));
+        return next(new AppErr(error.message || error, 500));
       }
     })
   );
 
   app.use(Golbalmiddlware);
-  app.listen(3000, () => {
-    console.log("Server is running on port 3000");
-  });
+  app.listen(3000, () => console.log("Server is running on port 3000"));
 });
+
 process.on("unhandledRejection", (e) => {
   console.error("Unhandled Rejection:", e.stack);
   process.exit(1);

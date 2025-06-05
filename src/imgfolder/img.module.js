@@ -51,15 +51,16 @@ const imgSchema = new mongoose.Schema({
     default: false,
   },
 });
+const ip = "192.168.1.20";
 imgSchema.set("toJSON", { virtuals: true });
 imgSchema.set("toObject", { virtuals: true });
 imgSchema.virtual("img_url_full").get(function () {
-  return "http://localhost:3000/user/" + this.img_url.split("\\").pop();
+  return "http://" + ip + ":3000/user/" + this.img_url.split("\\").pop();
 });
 imgSchema.virtual("similar_img_url_full").get(function () {
   if (this.similar_img_url)
     return (
-      "http://localhost:3000/user/" + this.similar_img_url.split("\\").pop()
+      "http://" + ip + ":3000/user/" + this.similar_img_url.split("\\").pop()
     );
   else return null;
 });

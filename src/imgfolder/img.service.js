@@ -104,7 +104,7 @@ module.exports.set_resive_time = expressAsyncHandler(async (req, res, next) => {
 
   const img = await imgModule
     .findOneAndUpdate(
-      { _id: id, id_user: user, found: true },
+      { _id: id, id_user: user, foundormiss: true },
       { resiv_time: time },
       { new: true }
     )
