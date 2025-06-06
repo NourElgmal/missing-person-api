@@ -5,6 +5,7 @@ const userModule = require("../user/user.module");
 const { deleteFile } = require("../../utils/deleteimg");
 const { Notifications } = require("../../utils/sendemail");
 const img_feature = require("../imagefeatures/imagefeature.module");
+const { fairmassage } = require("../../utils/notification");
 
 module.exports.getAllimg = expressAsyncHandler(async (req, res, next) => {
   const img = await imgModule.find({ found: false });
@@ -136,6 +137,15 @@ module.exports.set_resive_time = expressAsyncHandler(async (req, res, next) => {
     lostimg.name,
     `${img.police_address} - I will be there at ${time}`
   );
-
+  await fairmassage(
+    img.id_user.email,
+    "person found",
+    ` ${img.name} was found and the delivery location is in the department ${img.police_address} - I will be there at ${time}`
+  );
+  await fairmassage(
+    img.id_user_similar.email,
+    "person found",
+    ` ${lostimg.name} was found and the delivery location is in the department  ${img.police_address} - I will be there at ${time}`
+  );
   res.status(200).json({ message: "Time set successfully" });
 });

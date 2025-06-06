@@ -1,4 +1,4 @@
-const admin = require("firebase-admin"); // تأكد من أن هذا السطر مضاف
+const admin = require("firebase-admin");
 const User = require("../src/user/user.module");
 
 module.exports.fairmassage = async function sendNotificationToUserByEmail(
@@ -14,19 +14,19 @@ module.exports.fairmassage = async function sendNotificationToUserByEmail(
       return;
     }
 
-    // أخذ أول توكن فقط من المصفوفة
-    const token = user.myAppToken[0];
+    for (let i = 0; i < user.myAppToken.length; i++) {
+      const token = user.myAppToken[i];
 
-    const message = {
-      notification: {
-        title,
-        body,
-      },
-      token: token, // توكن واحد فقط
-    };
+      const message = {
+        notification: {
+          title,
+          body,
+        },
+        token: token,
+      };
 
-    const response = await admin.messaging().send(message);
-    console.log(`تم إرسال الإشعار بنجاح إلى توكن واحد:`, response);
+      const response = await admin.messaging().send(message);
+    }
   } catch (error) {
     console.error("خطأ أثناء إرسال الإشعار:", error);
   }

@@ -184,9 +184,8 @@ loadModels().then(() => {
         const user = await imgModule
           .findOne({ img_url: result })
           .populate("id_user", "email phone");
-        console.log("🧪 user found:", user);
+
         if (user) {
-          console.log("🧪 user found in :", user);
           user.found = true;
           user.similar = true;
           user.similar_img_url = img_url;
@@ -197,7 +196,7 @@ loadModels().then(() => {
             console.log(user.police_address);
             police_address = user.police_address;
           }
-          console.log("dcdmcdmdmmdm");
+
           Notifications(user.id_user.email, user.name, police_address);
           Notifications(req.email, name, police_address);
           await fairmassage(
