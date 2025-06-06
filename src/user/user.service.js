@@ -158,7 +158,7 @@ module.exports.Login_Complete_data = expressAsyncHandler(
   }
 );
 module.exports.Login = expressAsyncHandler(async (req, res, next) => {
-  const { email, password } = req.body;
+  const { email, password, myAppToken } = req.body;
   if (!email || !password) {
     return next(new AppErr("All fields are required", 400));
   }
@@ -173,6 +173,8 @@ module.exports.Login = expressAsyncHandler(async (req, res, next) => {
   if (!user.verified) {
     return next(new AppErr("Account is not verified check your email", 401));
   }
+  await user.updateOne({ $addToSet: { myAppToken: myAppToken } });
+  console.log(myAppToken);
 
   const token = jwt.sign(
     { email: user.email, id: user._id, role: user.role },

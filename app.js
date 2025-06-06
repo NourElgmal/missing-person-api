@@ -27,7 +27,12 @@ const expressAsyncHandler = require("express-async-handler");
 const { Notifications } = require("./utils/sendemail");
 const img_feature = require("./src/imagefeatures/imagefeature.module");
 const { deleteFile } = require("./utils/deleteimg");
-
+const admin = require("firebase-admin");
+const serviceAccount = require("./utils/missing-68668-firebase-adminsdk-fbsvc-4eb82cb703.json");
+const { fairmassage } = require("./utils/notification");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 faceapi.env.monkeyPatch({
   Canvas: canvas.Canvas,
   Image: canvas.Image,
@@ -179,8 +184,9 @@ loadModels().then(() => {
         const user = await imgModule
           .findOne({ img_url: result })
           .populate("id_user", "email phone");
-
+        console.log("🧪 user found:", user);
         if (user) {
+          console.log("🧪 user found in :", user);
           user.found = true;
           user.similar = true;
           user.similar_img_url = img_url;
@@ -191,13 +197,23 @@ loadModels().then(() => {
             console.log(user.police_address);
             police_address = user.police_address;
           }
-          await user.save();
-
+          console.log("dcdmcdmdmmdm");
           Notifications(user.id_user.email, user.name, police_address);
           Notifications(req.email, name, police_address);
+          await fairmassage(
+            user.id_user.email,
+            "person found",
+            ` ${user.name} was found and the delivery location is in the department ${police_address}`
+          );
+          await fairmassage(
+            req.email,
+            "person found",
+            ` ${name} was found and the delivery location is in the department ${police_address}`
+          );
+          await user.save();
         }
 
-        const missing = await imgModule.create({
+        const missingData = {
           name,
           age,
           Where_find_him,
@@ -207,10 +223,15 @@ loadModels().then(() => {
           id_user,
           similar: true,
           similar_img_url: result,
-          id_user_similar: user?.id_user || "",
           foundormiss,
           police_address,
-        });
+        };
+
+        if (user && user.id_user) {
+          missingData.id_user_similar = user.id_user;
+        }
+
+        const missing = await imgModule.create(missingData);
 
         res.status(200).send({
           message: "Image matched",
