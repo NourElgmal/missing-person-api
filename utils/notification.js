@@ -14,19 +14,17 @@ module.exports.fairmassage = async function sendNotificationToUserByEmail(
       return;
     }
 
-    for (let i = 0; i < user.myAppToken.length; i++) {
-      const token = user.myAppToken[i];
+    const token = user.myAppToken;
 
-      const message = {
-        notification: {
-          title,
-          body,
-        },
-        token: token,
-      };
+    const message = {
+      notification: {
+        title,
+        body,
+      },
+      token: token,
+    };
 
-      const response = await admin.messaging().send(message);
-    }
+    const response = await admin.messaging().send(message);
   } catch (error) {
     console.error("خطأ أثناء إرسال الإشعار:", error);
   }

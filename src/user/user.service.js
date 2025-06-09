@@ -7,10 +7,12 @@ const jwt = require("jsonwebtoken");
 const passport = require("passport");
 const fs = require("fs");
 const { deleteFile } = require("../../utils/deleteimg");
+const Ipclass = require("../../utils/ipclass");
 require("../../utils/passport");
 function generateRandomNumber() {
   return Math.floor(10000 + Math.random() * 90000);
 }
+
 module.exports.Signup = expressAsyncHandler(async (req, res, next) => {
   let { name, email, password, phone } = req.body;
 
@@ -158,7 +160,7 @@ module.exports.Login_Complete_data = expressAsyncHandler(
   }
 );
 module.exports.Login = expressAsyncHandler(async (req, res, next) => {
-  const { email, password, myAppToken } = req.body;
+  const { email, password, myAppToken, ip } = req.body;
   if (!email || !password) {
     return next(new AppErr("All fields are required", 400));
   }
@@ -173,13 +175,16 @@ module.exports.Login = expressAsyncHandler(async (req, res, next) => {
   if (!user.verified) {
     return next(new AppErr("Account is not verified check your email", 401));
   }
-  await user.updateOne({ $addToSet: { myAppToken: myAppToken } });
+  await user.updateOne({ myAppToken: myAppToken });
   console.log(myAppToken);
 
   const token = jwt.sign(
     { email: user.email, id: user._id, role: user.role },
     process.env.Key_Jwt_Token
   );
+  if (ip) {
+    Ipclass.IP = ip;
+  }
   res.status(201).json({ message: "login true", token: token });
 });
 

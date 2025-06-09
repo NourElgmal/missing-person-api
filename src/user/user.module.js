@@ -31,8 +31,8 @@ const schema = mongoose.Schema(
       default: Date.now,
     },
     myAppToken: {
-      type: [String],
-      default: [],
+      type: String,
+      default: "",
     },
   },
   { timestamps: true }

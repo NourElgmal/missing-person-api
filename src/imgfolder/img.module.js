@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const Ipclass = require("../../utils/ipclass");
 
 const imgSchema = new mongoose.Schema({
   name: { type: String },
@@ -51,16 +52,25 @@ const imgSchema = new mongoose.Schema({
     default: false,
   },
 });
-const ip = "192.168.1.20";
+//const ip = Ipclass.IP.toString(); // ? Ipclass.IP : "192.168.1.20";
+//console.log(ip);
 imgSchema.set("toJSON", { virtuals: true });
 imgSchema.set("toObject", { virtuals: true });
 imgSchema.virtual("img_url_full").get(function () {
-  return "http://" + ip + ":3000/user/" + this.img_url.split("\\").pop();
+  return (
+    "http://" +
+    Ipclass.IP.toString() +
+    ":3000/user/" +
+    this.img_url.split("\\").pop()
+  );
 });
 imgSchema.virtual("similar_img_url_full").get(function () {
   if (this.similar_img_url)
     return (
-      "http://" + ip + ":3000/user/" + this.similar_img_url.split("\\").pop()
+      "http://" +
+      Ipclass.IP.toString() +
+      ":3000/user/" +
+      this.similar_img_url.split("\\").pop()
     );
   else return null;
 });
